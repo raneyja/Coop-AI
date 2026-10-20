@@ -108,6 +108,10 @@ export function agentTurnAction(options: {
   ) {
     return "none";
   }
+  if (options.intentPlan?.interpretation === "model") {
+    const action = options.intentPlan.codeIntent?.action ?? "none";
+    return action === "none" && options.intentPlan.tools.length > 0 ? "understand" : action;
+  }
   // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.
   // How-to / product How-Why must not hunt even if the planner stamped "understand".
   if ((isRepoStructureQuery(options.query) && !isRequestedFileQuestion(options.query)) || isNonCodeHowWhyAsk(options.query)) {
@@ -144,6 +148,9 @@ export function agentTurnAllowsRepoTools(options: {
 }): boolean {
   if (options.integrationSlash) {
     return false;
+  }
+  if (options.intentPlan?.interpretation === "model") {
+    return (options.intentPlan.codeIntent?.action ?? "none") !== "none";
   }
   if (options.query && isApiRejectAsk(options.query)) {
     return true;

@@ -276,6 +276,7 @@ function preferredLineForPath(
 }
 
 export type AgentRunOptions = {
+  assertIdentity?: () => Promise<void>;
   loadRepoFacts?: (target: import("../../workspace/indexedRepoWorkspaceTypes").RepoTarget,
     onProgress?: (facts: Record<string, unknown>) => void) => Promise<Record<string, unknown> | undefined>;
   /** Started alongside source reads; settled before synthesis. */
@@ -336,6 +337,7 @@ export type AgentRunOptions = {
  * Deterministic search→read is only the no-planTurn fallback (tests / fail-open).
  */
 export class AgentOrchestrator {
+  private assertIdentity?: () => Promise<void>;
   private preserveCompoundWriteEvidence = false;
   private readonly registry;
   private runAllowedIntegrations: IntegrationChatProvider[] = [];
@@ -358,6 +360,7 @@ export class AgentOrchestrator {
   }
 
   public async executeTool(tool: AgentToolName, args: Record<string, unknown>): Promise<string> {
+    await this.assertIdentity?.();
     if (isAgentIntegrationTool(tool)) {
       return gatherRequest(this.ctx, "integration-search", () => handleIntegrationSearch(
         {
@@ -385,6 +388,7 @@ export class AgentOrchestrator {
     if (!request.repoId?.trim() || !request.message.trim() || options?.signal?.aborted) {
       return { steps: [], context: undefined };
     }
+    await options?.assertIdentity?.();
     const runId = randomUUID();
     const diagnostic = options?.onDiagnostic;
     const startedAt = Date.now();
@@ -403,12 +407,15 @@ export class AgentOrchestrator {
       if (options.signal?.aborted) return { steps: [], context: undefined };
       throw error;
     }
+    if (options.signal?.aborted) return { steps: [], context: undefined };
     if (!target?.repoId) {
       options.onDiagnostic?.({ stage: "outcome", repoId: requested.repoId, requestedBranch: requested.branch,
         outcome: "target-unavailable", elapsedMs: Date.now() - startedAt });
       return { steps: [], answer: "I couldn’t verify the selected repository and branch for this turn, so I can’t identify its source safely." };
     }
+    await options.assertIdentity?.();
     const run = new AgentOrchestrator(createRunToolContext(gatherContext, target, options.onDiagnostic));
+    run.assertIdentity = options.assertIdentity;
     if (options.capturedAttachment && (options.capturedAttachment.repoId !== target.repoId ||
         options.capturedAttachment.branch !== target.branch)) {
       options = { ...options, capturedAttachment: undefined };

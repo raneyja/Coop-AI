@@ -3,6 +3,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { promisify } from "node:util";
 import type { IndexManifest, ScipReference, ScipSymbol } from "./types";
+import { decodeScipIndexFile } from "../jobs/scipIndexDecoder";
+import { buildGoScipArgs, requireNonEmptyScipAnalysis } from "./scipIndexerContract";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,7 +22,7 @@ const SCIP_INDEXERS: Array<{ languages: string[]; command: string; args: (root: 
   {
     languages: ["go"],
     command: "scip-go",
-    args: (root, out) => ["--output", out, root]
+    args: buildGoScipArgs
   },
   {
     languages: ["java", "kotlin"],
@@ -64,6 +66,7 @@ export class ScipIndexer {
         maxBuffer: 20 * 1024 * 1024,
         cwd: manifest.localPath
       });
+      requireNonEmptyScipAnalysis(decodeScipIndexFile(outPath).length);
       return {
         ...manifest,
         scipIndexPath: outPath,
@@ -72,6 +75,7 @@ export class ScipIndexer {
         error: undefined
       };
     } catch (error) {
+      fs.rmSync(outPath, { force: true });
       return {
         ...manifest,
         scipAvailable: false,

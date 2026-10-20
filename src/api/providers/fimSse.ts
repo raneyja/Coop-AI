@@ -8,6 +8,7 @@ export function parseCompletionSseLine(line: string, state: ParseState): StreamC
   if (!data) {
     return undefined;
   }
+  if (typeof data.model === "string") state.model = data.model;
   const usage = data.usage as Record<string, unknown> | undefined;
   if (usage) {
     const promptTokens = readUsageInt(usage.prompt_tokens);

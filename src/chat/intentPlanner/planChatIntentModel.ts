@@ -1,5 +1,5 @@
 /**
- * Optional cheap-model layer for Chat Intent Planner (intent quarterback).
+ * Model interpretation for Chat Intent Planner (intent quarterback).
  * Names jobs, tools, and index-ready search criteria invented for this ask.
  * Does not search, cite, or answer. Fail-open: any error → undefined
  * (caller keeps the rules plan).
@@ -20,16 +20,11 @@ import {
   type ChatIntentPlan,
   type ChatIntentPlannerInput
 } from "./types";
-import { filterPlanToConnected, detectNamedTools } from "./planChatIntent";
+import { filterPlanToConnected } from "./planChatIntent";
 import { askedRejectFieldTokens, isApiRejectAsk } from "../../api/agent/searchQuery";
 import {
-  decisionPhrasePresent,
-  detectExplicitlyNamedTools,
-  mergeChatIntentTools,
-  planChatJobs,
   planChatTasks,
-  planChatTodos,
-  toolsImpliedByJobs
+  planChatTodos
 } from "./planChatJobs";
 
 const TOOLS = new Set<string>([
@@ -59,6 +54,7 @@ export function buildChatIntentPlanUserMessage(
     connectedTools?: IntegrationChatProvider[];
     constraint?: ChatCommandConstraint;
     conversation?: string;
+    sourceTarget?: import("../types").RepoContext;
   }
 ): string {
   const trimmed = question.trim();
@@ -68,12 +64,13 @@ export function buildChatIntentPlanUserMessage(
     "You are Coop's intent quarterback. Interpret this developer ask for gather planning.",
     "You invent jobs and search criteria for THIS ask. You do not search, cite, or answer.",
     "Reply with ONLY a JSON object (no markdown, no prose):",
-    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-site"|"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
+    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","codeIntent":{"action":"none"|"locate"|"understand"|"change"},"completionNeeds":["required outcome"],"jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-site"|"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
     "Rules:",
     '- Prefer workflow "none". Workflow is only for an explicit slash/Workflows command constraint.',
     "- Do not set blast-radius, find-owner, trace-decision, understand-repo, or knowledge-gaps from plain English.",
     "- Jobs + named tools stay. Compound asks may name tools (e.g. Jira) without a workflow.",
-    "- purpose = one short sentence: what done looks like for this paste.",
+    "- purpose = one short sentence: what done looks like for this request. completionNeeds lists all required outcomes.",
+    "- codeIntent.action describes whether the current request needs repository code: locate, understand, change, or none. Prior conversation resolves references but does not authorize a new edit.",
     "- jobs[].terms = the topic in a few words. Hyphens become spaces (SQL-injection → SQL injection).",
     "- For locate/code jobs: jobs[].searchCriteria = 2-6 index-ready queries invented from THIS ask (field names, symbols, ValidationError-shaped phrases, distinctive error wording the user used). Not Slack chit-chat topics.",
     '- For API error / reject / bad field pastes: evidenceClass "write-reject". searchCriteria MUST use field names, error wording, or concrete code terms present in the ask to find a server-side raise/validation — not calm locate topics or English summaries of the desired answer.',
@@ -97,6 +94,9 @@ export function buildChatIntentPlanUserMessage(
   }
   if (constraintLine) {
     lines.push(constraintLine);
+  }
+  if (options?.sourceTarget) {
+    lines.push(`Frozen source target (identity only, not evidence or permission to expand scope): ${JSON.stringify(options.sourceTarget)}`);
   }
   if (file) {
     lines.push(`Active file: ${file}`);
@@ -140,6 +140,8 @@ export function parseChatIntentPlanResponse(
       confidence?: unknown;
       jobs?: unknown;
       purpose?: unknown;
+      codeIntent?: unknown;
+      completionNeeds?: unknown;
     };
     const confidenceRaw =
       typeof parsed.confidence === "string"
@@ -167,13 +169,20 @@ export function parseChatIntentPlanResponse(
         ? parsed.purpose.replace(/\s+/g, " ").trim().slice(0, 160)
         : undefined;
 
-    if (tools.length === 0 && jobs.length === 0) {
+    const actionRaw = typeof parsed.codeIntent === "object" && parsed.codeIntent !== null
+      ? (parsed.codeIntent as { action?: unknown }).action : undefined;
+    const action = ["none", "locate", "understand", "change"].includes(String(actionRaw))
+      ? actionRaw as "none" | "locate" | "understand" | "change" : undefined;
+    if (tools.length === 0 && jobs.length === 0 && !purpose && !action) {
       return emptyChatIntentPlan(focus);
     }
 
     return filterPlanToConnected(
       {
-        mode: "tools-only",
+        mode: tools.length || jobs.length ? "tools-only" : "none",
+        interpretation: "model",
+        completionNeeds: parseStringList(parsed.completionNeeds, { maxLen: 200, maxWords: 36, maxItems: 8 }),
+        codeIntent: action ? { action, confidence, reason: "model-intent" } : undefined,
         tools,
         jobs,
         confidence: confidence === "low" ? "medium" : confidence,
@@ -290,18 +299,9 @@ export function shouldCallChatIntentModel(
   plan: ChatIntentPlan,
   input?: Pick<ChatIntentPlannerInput, "constraint" | "message">
 ): boolean {
-  const constraint = input?.constraint;
-  if (constraint && constraint.kind !== "none" && (input?.message?.trim().length ?? 0) >= 8) {
-    return true;
-  }
-  if (needsCodeCriteriaQuarterback(plan)) {
-    return true;
-  }
-  return (
-    plan.mode === "none" &&
-    (plan.jobs?.length ?? 0) === 0 &&
-    (plan.codeIntent?.action ?? "none") === "none"
-  );
+  // Every substantive request gets one interpretation. Rules are an unavailable-model
+  // fallback, not a veto over meaning. Supplied-source fast paths are owned by the caller.
+  return input ? Boolean(input.message?.trim()) : plan.mode !== "plain";
 }
 
 /** Locate / change asks need invented index criteria even when rules already planned jobs. */
@@ -322,7 +322,7 @@ export async function classifyChatIntentPlan(
   options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<ChatIntentPlan | undefined> {
   const message = input.message?.trim() ?? "";
-  if (input.disabled || message.length < 8) {
+  if (input.disabled || message.length < 2) {
     return undefined;
   }
   const timeoutMs = options?.timeoutMs ?? INTENT_SUGGEST_TIMEOUT_MS;
@@ -331,7 +331,8 @@ export async function classifyChatIntentPlan(
     activeFile: input.activeFile,
     connectedTools: input.connectedTools,
     constraint: input.constraint,
-    conversation: input.conversation
+    conversation: input.conversation,
+    sourceTarget: input.sourceTarget
   });
 
   const timeoutController = new AbortController();
@@ -348,40 +349,7 @@ export async function classifyChatIntentPlan(
       signal
     });
     const plan = parseChatIntentPlanResponse(raw, input.connectedTools, message);
-    if (plan.mode === "none" && (plan.jobs?.length ?? 0) === 0) {
-      return undefined;
-    }
-    const rulesJobs = planChatJobs({
-      message,
-      activeFile: input.activeFile,
-      connectedTools: input.connectedTools
-    });
-    const jobs = ensureCompoundWriteRejectJobs(
-      preferModelJobTerms(rulesJobs, plan.jobs),
-      message
-    );
-    if (jobs.length === 0) {
-      return plan.mode === "none" ? undefined : plan;
-    }
-    const named = detectNamedTools(message);
-    const implied = toolsImpliedByJobs({
-      jobs,
-      namedTools: named,
-      namedProducts: detectExplicitlyNamedTools(message),
-      connectedTools: input.connectedTools,
-      decisionImplied: decisionPhrasePresent(message)
-    });
-    const tools = mergeChatIntentTools(plan.tools, implied);
-    const tasks = planChatTasks({ jobs, tools });
-    return {
-      ...plan,
-      mode: plan.mode === "none" ? "tools-only" : plan.mode,
-      jobs,
-      tasks,
-      todos: planChatTodos(tasks),
-      tools,
-      purpose: plan.purpose
-    };
+    return plan.interpretation === "model" ? plan : undefined;
   } catch {
     return undefined;
   } finally {

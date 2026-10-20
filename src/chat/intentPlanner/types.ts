@@ -82,12 +82,18 @@ export type ChatIntentTodo = {
 };
 
 /**
- * Deterministic plan produced before gather / synthesis.
+ * Owned task plan produced before gather / synthesis. The model owns inferred
+ * meaning; code enforces explicit commands and source boundaries.
  * Always fail-open to `mode: "none"` when unsure.
  * `mode: "plain"` locks local explain — model must not promote a workflow.
  */
 export type ChatIntentPlan = {
   mode: ChatIntentPlanMode;
+  interpretation?: "model";
+  /** Code-owned command boundary; model output cannot supply this field. */
+  commandConstraint?: ChatCommandConstraint;
+  inferenceUsage?: { provider: string; model: string; inputTokens: number; outputTokens: number; estimatedCostUsd: number };
+  completionNeeds?: string[];
   /** Primary workflow (0 or 1). Maps onto existing quick-action pipelines. */
   workflow?: ChatIntentWorkflow;
   /**
@@ -146,6 +152,7 @@ export type ChatIntentPlannerInput = {
   constraint?: ChatCommandConstraint;
   /** Active Use-repo `owner/repo` — never a search term when the ask has a topic. */
   useRepo?: string;
+  sourceTarget?: import("../types").RepoContext;
   /** When true, skip planner (already planned re-entry). */
   disabled?: boolean;
 };

@@ -71,6 +71,7 @@ export async function syncThreadToBackend(
           relatedArtifactId: message.relatedArtifactId,
           sourceCitationMode: message.sourceCitationMode,
           modelContent: message.modelContent,
+          inferenceCalls: message.inferenceCalls,
           cancelled: message.cancelled,
           patchCard: message.patchCard
         }

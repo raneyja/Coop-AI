@@ -161,7 +161,7 @@ test("compound state ask carries separate write-site and reject evidence needs",
   assert.match(brief ?? "", /Write-reject:/);
 });
 
-test("production intent classification restores both D2 evidence floors when model omits one", async () => {
+test("production intent classification preserves model completion needs without adding rule-derived jobs", async () => {
   const promptCheck = (message: string) => {
     assert.match(message, /evidenceClass[^\n]*write-site/);
   };
@@ -221,8 +221,9 @@ test("production intent classification restores both D2 evidence floors when mod
     { timeoutMs: 2_000 }
   );
   assert.ok(repaired);
-  assert.ok(repaired.jobs?.some((job) => job.evidenceClass === "write-site"));
-  assert.ok(repaired.jobs?.some((job) => job.evidenceClass === "write-reject"));
+  assert.equal(repaired.interpretation, "model");
+  assert.equal(repaired.purpose, "Find where state is written and what rejects an invalid transition");
+  assert.deepEqual(repaired.jobs?.map(job => job.evidenceClass), ["definition-locate"]);
 });
 
 test("calm state definition locate remains distinct from reject intent", () => {

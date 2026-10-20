@@ -77,6 +77,7 @@ export class GeminiProviderClient extends BaseProviderClient {
           }
           try {
             const data = JSON.parse(payload) as Record<string, unknown>;
+            if (typeof data.modelVersion === "string") state.model = data.modelVersion;
             const usageMetadata = data.usageMetadata as Record<string, unknown> | undefined;
             if (usageMetadata) {
               const inputTokens = readUsageInt(usageMetadata.promptTokenCount);
@@ -109,7 +110,7 @@ export class GeminiProviderClient extends BaseProviderClient {
     yield {
       type: "done",
       usage: resolveUsage("gemini", options, state),
-      model: options.model,
+      model: state.model ?? options.model,
       provider: "gemini",
       finishReason: "stop"
     };

@@ -26,6 +26,20 @@ export function isUnauthenticatedApiError(error: unknown): boolean {
   );
 }
 
+export function shouldPreserveVerifiedSession(params: {
+  wasSignedIn: boolean;
+  nextSignedIn: boolean;
+  tokenBefore?: string;
+  tokenAfter?: string;
+}): boolean {
+  return Boolean(
+    params.wasSignedIn &&
+      !params.nextSignedIn &&
+      params.tokenBefore &&
+      params.tokenBefore === params.tokenAfter
+  );
+}
+
 /**
  * Confirm the stored session with /v1/me. Dead tokens are cleared so the UI
  * shows signed-out instead of inventing a free plan. Network failures keep the

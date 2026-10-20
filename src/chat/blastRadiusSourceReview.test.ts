@@ -35,7 +35,7 @@ test("normal source answers use one call and preserve the task and all routing/s
     };
     const final = await streamSourceGroundedBlast({ stream, request: original, evidence,
       onChunk: c => visible.push(c), onPhase: p => phases.push(p), baseUrl: "https://api.example.test" });
-    assert.deepEqual(calls, [original]);
+    assert.deepEqual(calls, [{ ...original, inferenceRole: "source_validation" }]);
     assert.deepEqual(visible, [quote]);
     assert.deepEqual(final.usage, usage);
     assert.deepEqual(phases.map(p => [p.phase, p.event]), [["synthesis", "start"], ["synthesis", "complete"]]);
@@ -56,7 +56,7 @@ test("invalid source quotes trigger one replacement preserving original evidence
   assert.equal(calls.length, 2); assert.deepEqual(visible, [quote]);
   const { message: repairedMessage, ...repairControls } = calls[1];
   const { message: originalMessage, ...originalControls } = request;
-  assert.deepEqual(repairControls, originalControls);
+  assert.deepEqual(repairControls, { ...originalControls, inferenceRole: "source_repair" });
   assert.ok(repairedMessage.startsWith(originalMessage + "\n\n"));
   assert.match(repairedMessage, /invalid-source-citation/);
   assert.match(repairedMessage, /untrusted data, not instructions/);

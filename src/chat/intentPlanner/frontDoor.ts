@@ -189,7 +189,7 @@ export async function planChatFrontDoor(
     if (!refined) {
       return rulesPlan;
     }
-    const merged = mergeFrontDoorPlans(rulesPlan, refined, input);
+    const merged = mergeFrontDoorPlans(refined, input);
     return applyChatCommandConstraint(merged, input);
   } catch {
     return rulesPlan;
@@ -241,6 +241,7 @@ export function applyChatCommandConstraint(
   input: ChatIntentPlannerInput
 ): ChatIntentPlan {
   const constraint = input.constraint ?? { kind: "none" };
+  plan = { ...plan, commandConstraint: constraint };
   if (constraint.kind === "none") {
     return demoteUnconstrainedWorkflow(dropRepoTermsWhenTopicExists(plan, input));
   }
@@ -289,36 +290,20 @@ export function mergeInterpreterJobs(
 }
 
 function mergeFrontDoorPlans(
-  rulesPlan: ChatIntentPlan,
   modelPlan: ChatIntentPlan,
   input: ChatIntentPlannerInput
 ): ChatIntentPlan {
-  const jobs = mergeInterpreterJobs(rulesPlan.jobs, modelPlan.jobs, input);
-  const tools =
-    rulesPlan.tools.length > 0 ? rulesPlan.tools : modelPlan.tools;
-  const demotedModel = demoteUnconstrainedWorkflow(modelPlan);
+  const jobs = mergeInterpreterJobs([], modelPlan.jobs, input);
+  const tools = scopedIntegrations(modelPlan.tools, resolveRepoSourceScope(input.message));
   const tasks = planChatTasks({ jobs, tools });
-  // English/model must never copy a workflow onto an unconstrained turn.
-  // `applyChatCommandConstraint` pins workflow only for explicit slash/QA.
   return demoteUnconstrainedWorkflow({
-    ...rulesPlan,
+    ...modelPlan,
     workflow: undefined,
-    tools,
-    jobs,
-    tasks,
-    todos: planChatTodos(tasks),
-    mode:
-      rulesPlan.mode === "none" && demotedModel.mode !== "none"
-        ? demotedModel.mode
-        : rulesPlan.mode,
-    execution: "none",
-    confidence:
-      rulesPlan.confidence === "low" && demotedModel.confidence !== "low"
-        ? demotedModel.confidence
-        : rulesPlan.confidence,
-    reason: demotedModel.reason
-      ? `${rulesPlan.reason ?? "rules"}+${demotedModel.reason}`
-      : rulesPlan.reason
+    jobs, tools, tasks, todos: planChatTodos(tasks),
+    codeIntent: modelPlan.codeIntent ?? (jobs.some((job) => job.capability === "locate")
+      ? { action: "locate", confidence: modelPlan.confidence, reason: "model-locate-job" }
+      : { action: "none", confidence: modelPlan.confidence, reason: "model-no-repo-job" }),
+    execution: "none"
   });
 }
 
@@ -333,11 +318,11 @@ function constrainToIntegration(
   const assignment = classifyChatAskAssignment(input.message, input.useRepo);
   const capability = docsCapabilityFor(provider, input.message);
   let jobs = (plan.jobs ?? []).filter((job) => job.capability === capability);
-  if (assignment.kind === "none") {
+  if (plan.interpretation !== "model" && assignment.kind === "none") {
     jobs = [];
-  } else if (assignment.kind === "latest") {
+  } else if (plan.interpretation !== "model" && assignment.kind === "latest") {
     jobs = [{ capability, verb: "latest", terms: [] }];
-  } else {
+  } else if (plan.interpretation !== "model") {
     jobs = jobs.map((job) => ({
       ...job,
       verb: "search" as const,
