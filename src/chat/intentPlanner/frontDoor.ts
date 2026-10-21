@@ -18,7 +18,7 @@ import {
   ensureCompoundWriteRejectJobs,
   shouldCallChatIntentModel
 } from "./planChatIntentModel";
-import { planChatIntentFromRules } from "./planChatIntent";
+import { detectNamedTools, planChatIntentFromRules } from "./planChatIntent";
 import { demoteUnconstrainedWorkflow } from "./resolveExecution";
 import {
   classifyChatAskAssignment,
@@ -35,6 +35,7 @@ import { isSearchMeaningStop } from "./searchMeaningStop";
 import {
   emptyChatIntentPlan,
   isChatIntentWorkflow,
+  type ChatActionAuthority,
   type ChatCommandConstraint,
   type ChatIntentJob,
   type ChatIntentJobCapability,
@@ -168,7 +169,7 @@ export function planChatFrontDoorFromRules(input: ChatIntentPlannerInput): ChatI
   const rules =
     message.length < 8 ? emptyChatIntentPlan(message) : planChatIntentFromRules(input);
   const jobs = ensureCompoundWriteRejectJobs(rules.jobs ?? [], message);
-  return applyChatCommandConstraint({ ...rules, jobs }, input);
+  return applyChatActionAuthority(applyChatCommandConstraint({ ...rules, jobs }, input), input);
 }
 
 export async function planChatFrontDoor(
@@ -190,10 +191,136 @@ export async function planChatFrontDoor(
       return rulesPlan;
     }
     const merged = mergeFrontDoorPlans(refined, input);
-    return applyChatCommandConstraint(merged, input);
+    return applyChatActionAuthority(applyChatCommandConstraint(merged, input), input);
   } catch {
     return rulesPlan;
   }
+}
+
+/**
+ * Convert interpreted user authority into an executable ceiling. Planning may
+ * choose work inside this boundary; tools and change actions outside it are
+ * removed before the request reaches prefetch or the agent loop.
+ */
+export function applyChatActionAuthority(
+  plan: ChatIntentPlan,
+  input: ChatIntentPlannerInput
+): ChatIntentPlan {
+  const constraint = input.constraint ?? { kind: "none" };
+  const commandAuthority = authorityFromCommand(constraint, plan);
+  const prior = input.priorActionAuthority;
+  const fallback = fallbackActionAuthority(plan, input);
+  const authority = commandAuthority ?? (
+    prior && plan.authorityChange !== "replace"
+      ? cloneActionAuthority(prior)
+      : plan.actionAuthority
+        ? cloneActionAuthority(plan.actionAuthority)
+        : prior
+          ? cloneActionAuthority(prior)
+          : fallback
+  );
+
+  if (authority.mode === "wait") {
+    return {
+      ...plan,
+      actionAuthority: { ...authority, repository: false, integrations: [] },
+      authorityChange: undefined,
+      mode: plan.workflow ? plan.mode : "none",
+      tools: [],
+      jobs: [],
+      tasks: [],
+      todos: [],
+      codeIntent: { action: "none", confidence: "high", reason: "user-authority:wait" }
+    };
+  }
+
+  const allowedIntegrations = new Set(authority.integrations);
+  const tools = plan.tools.filter((tool) => allowedIntegrations.has(tool));
+  const jobs = (plan.jobs ?? []).filter((job) => {
+    const repositoryJob = job.capability === "locate" || job.capability === "code-host";
+    return repositoryJob ? authority.repository : tools.length > 0;
+  });
+  const codeIntent = !authority.repository
+    ? { action: "none" as const, confidence: "high" as const, reason: "user-authority:no-repository" }
+    : authority.mode === "read" && plan.codeIntent?.action === "change"
+      ? { ...plan.codeIntent, action: "understand" as const, reason: "user-authority:read-only" }
+      : plan.codeIntent;
+  const tasks = planChatTasks({ jobs, tools });
+  const hasPlannedWork = tools.length > 0 || jobs.length > 0;
+  return {
+    ...plan,
+    actionAuthority: authority,
+    authorityChange: undefined,
+    tools,
+    jobs,
+    tasks,
+    todos: planChatTodos(tasks),
+    codeIntent,
+    mode: plan.workflow || plan.mode === "plain"
+      ? plan.mode
+      : hasPlannedWork ? "tools-only" : "none"
+  };
+}
+
+function authorityFromCommand(
+  constraint: ChatCommandConstraint,
+  plan: ChatIntentPlan
+): ChatActionAuthority | undefined {
+  if (constraint.kind === "none") return undefined;
+  if (constraint.kind === "integration") {
+    return { mode: "read", repository: false, integrations: [...plan.tools], source: "command" };
+  }
+  if (constraint.kind === "edit") {
+    return {
+      mode: "change",
+      repository: true,
+      integrations: [...(plan.actionAuthority?.integrations ?? [])],
+      source: "command"
+    };
+  }
+  return {
+    mode: "read",
+    repository: true,
+    integrations: [...(plan.actionAuthority?.integrations ?? plan.tools)],
+    source: "command"
+  };
+}
+
+function fallbackActionAuthority(
+  plan: ChatIntentPlan,
+  input: ChatIntentPlannerInput
+): ChatActionAuthority {
+  if (isExplicitActionDeferral(input.message)) {
+    return {
+      mode: "wait",
+      repository: false,
+      integrations: [],
+      source: "fallback"
+    };
+  }
+  const named = new Set(detectNamedTools(input.message));
+  const integrations = plan.interpretation === "model"
+    ? plan.tools.filter((tool) => named.has(tool))
+    : [...plan.tools];
+  const action = plan.codeIntent?.action ?? "none";
+  return {
+    mode: action === "change" ? "change" : "read",
+    repository: Boolean(input.useRepo || input.sourceTarget) || action !== "none" || (plan.jobs ?? []).some((job) =>
+      job.capability === "locate" || job.capability === "code-host"),
+    integrations,
+    source: "fallback"
+  };
+}
+
+/** Safe fallback when the intent model is unavailable; not an acceptance-case phrase. */
+function isExplicitActionDeferral(message: string): boolean {
+  const defer = /\b(?:wait|pause|hold(?:\s+off)?|stand\s+by)\b/i.test(message);
+  const boundary = /\b(?:acknowledge|confirm|do\s+not|don't|before\s+(?:you\s+)?(?:act|start|proceed))\b/i.test(message);
+  return defer && boundary;
+}
+
+function cloneActionAuthority(authority: ChatActionAuthority): ChatActionAuthority {
+  return { ...authority, integrations: [...authority.integrations] };
 }
 
 /** Live send-path helper: parse a raw composer line the same way handleChatSend does. */

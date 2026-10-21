@@ -138,6 +138,8 @@ export type ChatMessage = {
   /** Validated source turns keep anonymous examples separate from explicit quotes. */
   sourceCitationMode?: "explicit";
   clientSubmissionId?: string;
+  /** Effective user-granted action boundary for this user turn. */
+  actionAuthority?: import("./intentPlanner/types").ChatActionAuthority;
   role: "user" | "assistant" | "system";
   content: string;
   /** Full payload sent to the model for this user turn (may differ from visible bubble). */

@@ -13,6 +13,7 @@ import {
 } from "../quickActionIntentModel";
 import {
   emptyChatIntentPlan,
+  type ChatActionAuthority,
   type ChatCommandConstraint,
   type ChatIntentEvidenceClass,
   type ChatIntentJob,
@@ -55,6 +56,7 @@ export function buildChatIntentPlanUserMessage(
     constraint?: ChatCommandConstraint;
     conversation?: string;
     sourceTarget?: import("../types").RepoContext;
+    priorActionAuthority?: ChatActionAuthority;
   }
 ): string {
   const trimmed = question.trim();
@@ -64,12 +66,15 @@ export function buildChatIntentPlanUserMessage(
     "You are Coop's intent quarterback. Interpret this developer ask for gather planning.",
     "You invent jobs and search criteria for THIS ask. You do not search, cite, or answer.",
     "Reply with ONLY a JSON object (no markdown, no prose):",
-    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","codeIntent":{"action":"none"|"locate"|"understand"|"change"},"completionNeeds":["required outcome"],"jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-site"|"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
+    '{"workflow":"none","tools":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"],"confidence":"high"|"medium"|"low","purpose":"short done-looks-like","authority":{"mode":"wait"|"read"|"change","repository":true|false,"integrations":["jira"|"slack"|"teams"|"confluence"|"notion"|"google-docs"]},"authorityChange":"retain"|"replace","codeIntent":{"action":"none"|"locate"|"understand"|"change"},"completionNeeds":["required outcome"],"jobs":[{"capability":"locate"|"decision"|"docs"|"code-host","verb":"search"|"latest","terms":["topic"],"searchCriteria":["index query"],"evidenceClass":"write-site"|"write-reject"|"definition-locate"|"decision"|"docs"|"code-host"}]}',
     "Rules:",
     '- Prefer workflow "none". Workflow is only for an explicit slash/Workflows command constraint.',
     "- Do not set blast-radius, find-owner, trace-decision, understand-repo, or knowledge-gaps from plain English.",
     "- Jobs + named tools stay. Compound asks may name tools (e.g. Jira) without a workflow.",
     "- purpose = one short sentence: what done looks like for this request. completionNeeds lists all required outcomes.",
+    "- authority is the user's granted action boundary, not the actions you prefer. wait means acknowledge/answer without any repository, integration, edit, or patch action. read allows investigation but no patch proposal. change allows a patch proposal; Apply remains user-controlled.",
+    "- authority.integrations contains only integration providers permitted for this task. An available or potentially helpful provider is not permission. Repository-only, no-integrations, and wait instructions require an empty list.",
+    "- authorityChange is replace only when the current user message explicitly expands or narrows the prior boundary. Otherwise retain it. Restrictions persist across turns; a new question or useful next step does not silently remove them.",
     "- codeIntent.action describes whether the current request needs repository code: locate, understand, change, or none. Prior conversation resolves references but does not authorize a new edit.",
     "- jobs[].terms = the topic in a few words. Hyphens become spaces (SQL-injection → SQL injection).",
     "- For locate/code jobs: jobs[].searchCriteria = 2-6 index-ready queries invented from THIS ask (field names, symbols, ValidationError-shaped phrases, distinctive error wording the user used). Not Slack chit-chat topics.",
@@ -97,6 +102,9 @@ export function buildChatIntentPlanUserMessage(
   }
   if (options?.sourceTarget) {
     lines.push(`Frozen source target (identity only, not evidence or permission to expand scope): ${JSON.stringify(options.sourceTarget)}`);
+  }
+  if (options?.priorActionAuthority) {
+    lines.push(`Prior effective action boundary (retain unless the current user explicitly changes it): ${JSON.stringify(options.priorActionAuthority)}`);
   }
   if (file) {
     lines.push(`Active file: ${file}`);
@@ -142,6 +150,8 @@ export function parseChatIntentPlanResponse(
       purpose?: unknown;
       codeIntent?: unknown;
       completionNeeds?: unknown;
+      authority?: unknown;
+      authorityChange?: unknown;
     };
     const confidenceRaw =
       typeof parsed.confidence === "string"
@@ -173,7 +183,9 @@ export function parseChatIntentPlanResponse(
       ? (parsed.codeIntent as { action?: unknown }).action : undefined;
     const action = ["none", "locate", "understand", "change"].includes(String(actionRaw))
       ? actionRaw as "none" | "locate" | "understand" | "change" : undefined;
-    if (tools.length === 0 && jobs.length === 0 && !purpose && !action) {
+    const actionAuthority = parseModelActionAuthority(parsed.authority, connectedTools);
+    const authorityChange = parsed.authorityChange === "replace" ? "replace" : "retain";
+    if (tools.length === 0 && jobs.length === 0 && !purpose && !action && !actionAuthority) {
       return emptyChatIntentPlan(focus);
     }
 
@@ -181,6 +193,8 @@ export function parseChatIntentPlanResponse(
       {
         mode: tools.length || jobs.length ? "tools-only" : "none",
         interpretation: "model",
+        actionAuthority,
+        authorityChange,
         completionNeeds: parseStringList(parsed.completionNeeds, { maxLen: 200, maxWords: 36, maxItems: 8 }),
         codeIntent: action ? { action, confidence, reason: "model-intent" } : undefined,
         tools,
@@ -197,6 +211,36 @@ export function parseChatIntentPlanResponse(
   } catch {
     return emptyChatIntentPlan(focus);
   }
+}
+
+function parseModelActionAuthority(
+  raw: unknown,
+  connectedTools: IntegrationChatProvider[]
+): ChatActionAuthority | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const value = raw as { mode?: unknown; repository?: unknown; integrations?: unknown };
+  if (value.mode !== "wait" && value.mode !== "read" && value.mode !== "change") {
+    return undefined;
+  }
+  if (typeof value.repository !== "boolean" || !Array.isArray(value.integrations)) {
+    return undefined;
+  }
+  const connected = new Set(connectedTools);
+  const integrations = value.integrations.flatMap((item) => {
+    if (typeof item !== "string") return [];
+    const key = item.trim().toLowerCase();
+    return TOOLS.has(key) && connected.has(key as IntegrationChatProvider)
+      ? [key as IntegrationChatProvider]
+      : [];
+  });
+  return {
+    mode: value.mode,
+    repository: value.mode === "wait" ? false : value.repository,
+    integrations: value.mode === "wait" ? [] : [...new Set(integrations)],
+    source: "model"
+  };
 }
 
 function extractJsonObject(text: string): string | undefined {
@@ -332,7 +376,8 @@ export async function classifyChatIntentPlan(
     connectedTools: input.connectedTools,
     constraint: input.constraint,
     conversation: input.conversation,
-    sourceTarget: input.sourceTarget
+    sourceTarget: input.sourceTarget,
+    priorActionAuthority: input.priorActionAuthority
   });
 
   const timeoutController = new AbortController();

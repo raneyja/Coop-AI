@@ -70,6 +70,10 @@ export function agentTurnAction(options: {
   /** Live highlight on this send. */
   selectedLines?: [number, number];
 }): RepoCodeAction {
+  const authority = options.intentPlan?.actionAuthority;
+  if (authority?.mode === "wait") {
+    return "none";
+  }
   if (options.fileAssistant) {
     return "none";
   }
@@ -110,7 +114,8 @@ export function agentTurnAction(options: {
   }
   if (options.intentPlan?.interpretation === "model") {
     const action = options.intentPlan.codeIntent?.action ?? "none";
-    return action === "none" && options.intentPlan.tools.length > 0 ? "understand" : action;
+    const planned = action === "none" && options.intentPlan.tools.length > 0 ? "understand" : action;
+    return authority?.mode === "read" && planned === "change" ? "understand" : planned;
   }
   // Inventory / layout facts use IndexedRepoWorkspace, not list_directory samples.
   // How-to / product How-Why must not hunt even if the planner stamped "understand".
@@ -124,7 +129,8 @@ export function agentTurnAction(options: {
     return "locate";
   }
   if (isRequestedFileQuestion(options.query)) {
-    return classifyRepoCodeIntent(options.query).action === "change" ? "change" : "understand";
+    const requested = classifyRepoCodeIntent(options.query).action === "change" ? "change" : "understand";
+    return authority?.mode === "read" && requested === "change" ? "understand" : requested;
   }
   if (!plannerAllowsAgentRepoLoop(options.intentPlan, options.query)) {
     return "none";
@@ -133,7 +139,7 @@ export function agentTurnAction(options: {
   if (classified.action === "none" && (options.intentPlan?.tools.length ?? 0) > 0) {
     return "understand";
   }
-  return classified.action;
+  return authority?.mode === "read" && classified.action === "change" ? "understand" : classified.action;
 }
 
 /**
@@ -146,6 +152,10 @@ export function agentTurnAllowsRepoTools(options: {
   intentPlan?: ChatIntentPlan;
   integrationSlash?: boolean;
 }): boolean {
+  const authority = options.intentPlan?.actionAuthority;
+  if (authority?.mode === "wait" || authority?.repository === false) {
+    return false;
+  }
   if (options.integrationSlash) {
     return false;
   }
@@ -219,7 +229,13 @@ export function integrationsForAgentLoop(options: {
   plan?: ChatIntentPlan;
   query?: string;
 }): IntegrationChatProvider[] {
-  return scopedIntegrations(options.plan?.tools ?? [], resolveRepoSourceScope(options.query));
+  const authority = options.plan?.actionAuthority;
+  if (authority?.mode === "wait") return [];
+  const connected = new Set(options.connected);
+  const allowed = authority ? new Set(authority.integrations) : undefined;
+  const planned = (options.plan?.tools ?? []).filter((tool) =>
+    connected.has(tool) && (!allowed || allowed.has(tool)));
+  return scopedIntegrations(planned, resolveRepoSourceScope(options.query));
 }
 
 /**

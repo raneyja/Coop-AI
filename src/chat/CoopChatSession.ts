@@ -7401,7 +7401,11 @@ export class CoopChatSession {
       role: "user",
       content: historyWithScope,
       timestamp: Date.now(),
-      attachments: attachments?.length ? attachments : undefined
+      attachments: attachments?.length ? attachments : undefined,
+      actionAuthority: turnIntentPlan.actionAuthority ? {
+        ...turnIntentPlan.actionAuthority,
+        integrations: [...turnIntentPlan.actionAuthority.integrations]
+      } : undefined
     };
     if (!options?.skipUserHistoryPush) {
       this.chatHistory.push(userMessage);
@@ -8250,6 +8254,9 @@ export class CoopChatSession {
         .map((entry) => `${entry.role}: ${entry.content}`).join("\n"),
       activeFile: context.file,
       sourceTarget: fileAssistant ? { file: context.file, fileSource: context.fileSource, selectedLines: context.selectedLines } : { ...context },
+      priorActionAuthority: [...(options?.history ?? this.chatHistory)]
+        .reverse()
+        .find((entry) => entry.role === "user" && !entry.cancelled && entry.actionAuthority)?.actionAuthority,
       connectedTools,
       constraint: options?.constraint,
       useRepo: fileAssistant || !(owner && repo) ? undefined : `${owner}/${repo}`

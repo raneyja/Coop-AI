@@ -4,7 +4,8 @@ import { CoopChatSession } from "./CoopChatSession";
 import { ThreadRunManager } from "./chatTurn";
 import { emptyChatIntentPlan } from "./intentPlanner/types";
 import { planChatFrontDoor } from "./intentPlanner/frontDoor";
-import { agentTurnAction, agentTurnAllowsRepoTools } from "./agentRouting";
+import { agentTurnAction, agentTurnAllowsRepoTools, integrationsForAgentLoop } from "./agentRouting";
+import { resolveChatIntentExecution } from "./intentPlanner/resolveExecution";
 import { SecureApiClient, type StreamChatParams } from "./SecureApiClient";
 import { agentRequestContext } from "./agentRequestContext";
 import { syncThreadToBackend } from "./threadSync";
@@ -92,6 +93,136 @@ test("a valid model interpretation owns purpose and inferred action; explicit pr
   const workflow = await planChatFrontDoor({ message: "Review queue impacts", connectedTools: [],
     constraint: { kind: "workflow", workflow: "blast-radius" } }, { complete });
   assert.equal(workflow.workflow, "blast-radius");
+});
+
+test("wait authority blocks adversarial tool and change plans before execution", async () => {
+  const complete = async () => JSON.stringify({
+    confidence: "high",
+    purpose: "Acknowledge the operating boundary and wait",
+    authority: { mode: "wait", repository: false, integrations: [] },
+    authorityChange: "replace",
+    codeIntent: { action: "change" },
+    tools: ["slack", "jira"],
+    jobs: [
+      { capability: "decision", terms: ["release discussion"] },
+      { capability: "locate", terms: ["release handler"] }
+    ]
+  });
+  const plan = await planChatFrontDoor({
+    message: "Hold here. Confirm the rules and wait until I send the incident details.",
+    connectedTools: ["slack", "jira"]
+  }, { complete });
+
+  assert.equal(plan.actionAuthority?.mode, "wait");
+  assert.deepEqual(plan.tools, []);
+  assert.deepEqual(plan.jobs, []);
+  assert.equal(resolveChatIntentExecution(plan).kind, "none");
+  assert.equal(agentTurnAction({ query: "wait", hasQuickAction: false, intentPlan: plan }), "none");
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan }), false);
+  assert.deepEqual(integrationsForAgentLoop({ connected: ["slack", "jira"], plan }), []);
+});
+
+test("repository-only read authority permits investigation but blocks vendors and patch proposals", async () => {
+  const complete = async () => JSON.stringify({
+    confidence: "high",
+    purpose: "Explain the failing check from repository evidence",
+    authority: { mode: "read", repository: true, integrations: [] },
+    authorityChange: "replace",
+    codeIntent: { action: "change" },
+    tools: ["slack", "jira"],
+    jobs: [
+      { capability: "locate", terms: ["membership check"], searchCriteria: ["membership suspended"] },
+      { capability: "decision", terms: ["access policy"] }
+    ]
+  });
+  const plan = await planChatFrontDoor({
+    message: "Inspect the selected repository only and keep this read-only.",
+    connectedTools: ["slack", "jira"]
+  }, { complete });
+
+  assert.deepEqual(plan.tools, []);
+  assert.deepEqual(plan.jobs?.map((job) => job.capability), ["locate"]);
+  assert.equal(plan.codeIntent?.action, "understand");
+  assert.equal(agentTurnAction({ query: "inspect the failure", hasQuickAction: false, intentPlan: plan }), "understand");
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan }), true);
+  assert.deepEqual(integrationsForAgentLoop({ connected: ["slack", "jira"], plan }), []);
+});
+
+test("thread restrictions persist until an explicit later message replaces them", async () => {
+  const prior = { mode: "read" as const, repository: true, integrations: [], source: "model" as const };
+  const retain = await planChatFrontDoor({
+    message: "Give me the remediation plan and keep the same limits.",
+    connectedTools: ["slack"],
+    priorActionAuthority: prior
+  }, { complete: async () => JSON.stringify({
+    confidence: "high",
+    purpose: "Plan the remediation",
+    authority: { mode: "read", repository: true, integrations: ["slack"] },
+    authorityChange: "retain",
+    codeIntent: { action: "change" },
+    tools: ["slack"],
+    jobs: [{ capability: "decision", terms: ["remediation"] }]
+  }) });
+  assert.deepEqual(retain.actionAuthority?.integrations, []);
+  assert.equal(retain.actionAuthority?.mode, "read");
+  assert.deepEqual(retain.tools, []);
+  assert.notEqual(agentTurnAction({ query: "plan remediation", hasQuickAction: false, intentPlan: retain }), "change");
+
+  const expanded = await planChatFrontDoor({
+    message: "Proceed with a patch proposal in the selected repository. Do not apply it.",
+    connectedTools: ["slack"],
+    priorActionAuthority: prior
+  }, { complete: async () => JSON.stringify({
+    confidence: "high",
+    purpose: "Prepare an evidence-backed patch proposal",
+    authority: { mode: "change", repository: true, integrations: [] },
+    authorityChange: "replace",
+    codeIntent: { action: "change" },
+    tools: [],
+    jobs: [{ capability: "locate", terms: ["membership guard"] }]
+  }) });
+  assert.equal(expanded.actionAuthority?.mode, "change");
+  assert.equal(agentTurnAction({ query: "prepare the patch", hasQuickAction: false, intentPlan: expanded }), "change");
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: expanded }), true);
+});
+
+test("an explicit integration command grants only that provider for the current turn", async () => {
+  const plan = await planChatFrontDoor({
+    message: "Find the latest incident note",
+    connectedTools: ["slack", "jira"],
+    priorActionAuthority: { mode: "wait", repository: false, integrations: [], source: "model" },
+    constraint: { kind: "integration", provider: "slack" }
+  }, { complete: async () => JSON.stringify({
+    confidence: "high",
+    authority: { mode: "wait", repository: false, integrations: [] },
+    authorityChange: "retain",
+    tools: ["slack", "jira"],
+    jobs: [{ capability: "decision", verb: "latest", terms: [] }]
+  }) });
+  assert.equal(plan.actionAuthority?.source, "command");
+  assert.deepEqual(plan.actionAuthority?.integrations, ["slack"]);
+  assert.deepEqual(plan.tools, ["slack"]);
+  assert.equal(agentTurnAllowsRepoTools({ intentPlan: plan, integrationSlash: true }), false);
+  assert.deepEqual(integrationsForAgentLoop({ connected: ["slack", "jira"], plan }), ["slack"]);
+});
+
+test("captured turn authority is isolated from mutable history and plan inputs", () => {
+  const authority = { mode: "read" as const, repository: true, integrations: [] as Array<"slack">, source: "model" as const };
+  const history = [{ role: "user" as const, content: "Read the repository only", timestamp: 1, actionAuthority: authority }];
+  const plan = { ...emptyChatIntentPlan(history[0].content), actionAuthority: authority };
+  const turn = new ThreadRunManager().begin({
+    threadId: "authority",
+    context: { owner: "coop", repo: "service", branch: "main" },
+    history,
+    artifacts: [],
+    sessionCostUsd: 0,
+    modelMessage: history[0].content,
+    intentPlan: plan
+  });
+  history[0].actionAuthority!.integrations.push("slack");
+  plan.actionAuthority!.mode = "change";
+  assert.equal(turn.intentPlan.actionAuthority?.mode, "read");
+  assert.deepEqual(turn.history[0].actionAuthority?.integrations, []);
 });
 
 test("an account switch while scope lookup is delayed prevents integration credential use", async () => {
