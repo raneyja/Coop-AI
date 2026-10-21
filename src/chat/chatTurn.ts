@@ -120,6 +120,10 @@ function captureIntentPlan(plan: ChatIntentPlan): ChatIntentPlan {
   return Object.freeze({
     ...plan,
     commandConstraint: plan.commandConstraint ? Object.freeze({ ...plan.commandConstraint }) : undefined,
+    actionAuthority: plan.actionAuthority ? Object.freeze({
+      ...plan.actionAuthority,
+      integrations: Object.freeze([...plan.actionAuthority.integrations]) as unknown as ChatIntentPlan["tools"]
+    }) : undefined,
     codeIntent: plan.codeIntent ? Object.freeze({ ...plan.codeIntent }) : undefined,
     completionNeeds: plan.completionNeeds ? [...plan.completionNeeds] : undefined,
     tools: Object.freeze([...plan.tools]) as unknown as ChatIntentPlan["tools"],
@@ -156,7 +160,14 @@ export class ThreadRunManager {
       status: "running",
       startedAt,
       context: { ...input.context, ...(input.context.selectedLines ? { selectedLines: [...input.context.selectedLines] as [number, number] } : {}) },
-      history: input.history.map((entry) => ({ ...entry, attachments: entry.attachments?.map((attachment) => ({ ...attachment })) })),
+      history: input.history.map((entry) => ({
+        ...entry,
+        attachments: entry.attachments?.map((attachment) => ({ ...attachment })),
+        actionAuthority: entry.actionAuthority ? {
+          ...entry.actionAuthority,
+          integrations: [...entry.actionAuthority.integrations]
+        } : undefined
+      })),
       requestSettings: input.requestSettings ? Object.freeze({ ...input.requestSettings }) : undefined,
       connectedIntegrations: input.connectedIntegrations ? [...input.connectedIntegrations] : undefined,
       quotaTurnId: input.quotaTurnId,

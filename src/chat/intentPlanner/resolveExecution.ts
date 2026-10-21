@@ -51,13 +51,26 @@ export function demoteUnconstrainedWorkflow(plan: ChatIntentPlan): ChatIntentPla
 export function resolveChatIntentExecution(plan: ChatIntentPlan): ChatIntentExecutionDecision {
   const unconstrained = demoteUnconstrainedWorkflow(plan);
 
+  if (unconstrained.actionAuthority?.mode === "wait") {
+    return { kind: "none" };
+  }
+
   // Locked local explain — never promote workflow or tools.
   if (unconstrained.mode === "plain") {
     return { kind: "none" };
   }
 
-  if (unconstrained.tools.length > 0) {
-    return { kind: "tools-only", tools: unconstrained.tools, plan: unconstrained };
+  const allowed = unconstrained.actionAuthority
+    ? new Set(unconstrained.actionAuthority.integrations)
+    : undefined;
+  const tools = allowed
+    ? unconstrained.tools.filter((tool) => allowed.has(tool))
+    : unconstrained.tools;
+  if (tools.length > 0) {
+    const restricted = tools.length === unconstrained.tools.length
+      ? unconstrained
+      : { ...unconstrained, tools };
+    return { kind: "tools-only", tools, plan: restricted };
   }
 
   return { kind: "none" };

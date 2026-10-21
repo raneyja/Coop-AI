@@ -19,6 +19,17 @@ export type ChatIntentWorkflow = QuickActionId;
 
 export type ChatIntentExecution = "silent" | "confirm" | "none";
 
+/**
+ * User-granted action boundary for one chat thread.
+ * The interpreter describes the boundary; request/action code enforces it.
+ */
+export type ChatActionAuthority = {
+  mode: "wait" | "read" | "change";
+  repository: boolean;
+  integrations: IntegrationChatProvider[];
+  source: "model" | "command" | "fallback";
+};
+
 export type ChatIntentPlanMode =
   | "none"
   | "plain"
@@ -90,6 +101,10 @@ export type ChatIntentTodo = {
 export type ChatIntentPlan = {
   mode: ChatIntentPlanMode;
   interpretation?: "model";
+  /** Effective user-granted boundary captured with the turn and user message. */
+  actionAuthority?: ChatActionAuthority;
+  /** Interpreter says the current message explicitly changed the prior boundary. */
+  authorityChange?: "retain" | "replace";
   /** Code-owned command boundary; model output cannot supply this field. */
   commandConstraint?: ChatCommandConstraint;
   inferenceUsage?: { provider: string; model: string; inputTokens: number; outputTokens: number; estimatedCostUsd: number };
@@ -153,6 +168,8 @@ export type ChatIntentPlannerInput = {
   /** Active Use-repo `owner/repo` — never a search term when the ask has a topic. */
   useRepo?: string;
   sourceTarget?: import("../types").RepoContext;
+  /** Last effective boundary in this thread; restrictions persist until changed. */
+  priorActionAuthority?: ChatActionAuthority;
   /** When true, skip planner (already planned re-entry). */
   disabled?: boolean;
 };
